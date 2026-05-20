@@ -166,7 +166,7 @@
 
 <div id="result-container">
     <img id="result-image" src="" alt="撮影された写真">
-    <div id="result-msg">📷 写真をながおしして<br>「画像に保存」または「ダウンロード」をえらんでね！</div>
+    <div id="result-msg">📷 写真を長押しして<br>「画像に保存」または「ダウンロード」をえらんでね！</div>
     <button id="close-btn">もう一度撮る</button>
 </div>
 
@@ -198,7 +198,7 @@ const faceMesh = new FaceMesh({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
 
-// 👥 複数人（最大4人グループまで）同時にフクロウが出るようにパワーアップ！
+// 複数人（最大4人グループまで）同時にフクロウが出る設定
 faceMesh.setOptions({
     maxNumFaces: 4, 
     refineLandmarks: true,
@@ -210,7 +210,6 @@ faceMesh.onResults((results) => {
     loading.style.display = 'none';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 画面に映っている人数分だけ処理を繰り返すループ（for文）
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         for (let i = 0; i < results.multiFaceLandmarks.length; i++) {
             const landmarks = results.multiFaceLandmarks[i];
@@ -237,9 +236,9 @@ faceMesh.onResults((results) => {
             const owlWidth = faceSize * 1.3;  
             const owlHeight = faceSize * 1.3; 
             
-            // 【微調整可能エリア】1.2や0.4の数字を変えることでフクロウの位置をずらせます
-            const owlX = x - owlWidth * 1.2; 
-            const owlY = y + owlHeight * 0.4;
+            // 【フクロウの位置微調整エリア】1.2 や 0.4 を変えると位置がズレます
+            const owlX = x - owlWidth * 1.6; 
+            const owlY = y + owlHeight * 0.1;
 
             if (owlImg.complete && owlImg.naturalWidth !== 0) {
                 ctx.drawImage(owlImg, owlX, owlY, owlWidth, owlHeight);
@@ -277,7 +276,7 @@ switchBtn.addEventListener('click', () => {
     startCamera(currentFacingMode);
 });
 
-// --- 📸 写真撮影＆スマホ長押し保存システム（JPEG高画質軽量版） ---
+// 写真撮影＆スマホ長押し保存システム（JPEG高画質軽量版）
 shutterBtn.addEventListener('click', () => {
     const saveCanvas = document.createElement('canvas');
     saveCanvas.width = canvas.width;
@@ -295,7 +294,7 @@ shutterBtn.addEventListener('click', () => {
 
     saveCtx.drawImage(canvas, 0, 0);
 
-    // 📸 ここでPNGからJPEGに変換しています（画質85%で超軽量・高画質）
+    // PNGからJPEGに変換（画質85%で超軽量・高画質）
     resultImage.src = saveCanvas.toDataURL('image/jpeg', 0.85);
     resultContainer.style.display = 'flex';
 });
