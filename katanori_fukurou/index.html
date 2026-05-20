@@ -2,15 +2,14 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>お店専用・肩乗りフクロウカメラ</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* スマホ縦長全画面にフィットさせるコンテナ */
         #app-container {
             position: relative;
             width: 100%;
@@ -20,16 +19,15 @@
             align-items: center;
         }
 
-        /* カメラ映像を画面いっぱいに広げる（黒帯なし） */
+        /* スマホの縦向き・横向きを自動判別し、黒帯なしの100%全画面に引き伸ばす設定 */
         video {
             position: absolute;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* 自撮り用に反転 */
+            transform: scaleX(-1); /* 自撮り用に鏡反転 */
         }
 
-        /* フクロウを描画する透明なキャンバス */
         canvas {
             position: absolute;
             width: 100%;
@@ -39,37 +37,84 @@
             z-index: 10;
         }
 
-        /* オシャレなシャッターボタン */
+        /* スタイリッシュなカメラのシャッターボタン */
         #shutter-btn {
             position: absolute;
             bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
-            width: 76px;
-            height: 76px;
-            background: rgba(255, 255, 255, 0.9);
-            border: 6px solid rgba(255, 255, 255, 0.4);
+            width: 78px;
+            height: 78px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 6px solid rgba(255, 255, 255, 0.35);
             border-radius: 50%;
             cursor: pointer;
             z-index: 20;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
             outline: none;
+            -webkit-tap-highlight-color: transparent;
         }
         #shutter-btn:active {
-            background: rgba(200, 200, 200, 0.9);
-            transform: translateX(-50%) scale(0.95);
+            background: rgba(220, 220, 220, 0.95);
+            transform: translateX(-50%) scale(0.92);
         }
 
-        /* 読み込み中の案内表示 */
         #loading {
             position: absolute;
             color: white;
-            font-size: 16px;
-            background: rgba(0,0,0,0.7);
-            padding: 15px 25px;
-            border-radius: 30px;
+            font-size: 15px;
+            background: rgba(0,0,0,0.75);
+            padding: 12px 24px;
+            border-radius: 25px;
             z-index: 30;
             pointer-events: none;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        /* 📸 撮影後の確認ポップアップ画面 */
+        #result-container {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 40;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #result-image {
+            max-width: 100%;
+            max-height: 72vh;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+            object-fit: contain;
+        }
+
+        #result-msg {
+            color: white;
+            font-size: 16px;
+            margin-top: 18px;
+            text-align: center;
+            font-weight: bold;
+            line-height: 1.5;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #close-btn {
+            margin-top: 20px;
+            padding: 14px 36px;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 28px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            -webkit-tap-highlight-color: transparent;
         }
     </style>
 </head>
@@ -82,21 +127,26 @@
     <div id="loading">🦉 フクロウを呼んでいます...</div>
 </div>
 
+<div id="result-container">
+    <img id="result-image" src="" alt="撮影された写真">
+    <div id="result-msg">📷 写真をながおしして<br>「ライブラリに保存」をえらんでね！</div>
+    <button id="close-btn">もう一度撮る</button>
+</div>
+
 <script>
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('output_canvas');
 const ctx = canvas.getContext('2d');
 const loading = document.getElementById('loading');
 const shutterBtn = document.getElementById('shutter-btn');
+const resultContainer = document.getElementById('result-container');
+const resultImage = document.getElementById('result-image');
+const closeBtn = document.getElementById('close-btn');
 
-// --- 🦉 フクロウの画像をセットする設定 ---
+// --- 🦉 フクロウ画像の設定（GitHub内の同じ場所にある画像を自動読み込み） ---
 const owlImg = new Image();
-// ★ここにお店のフクロウ画像のURLを貼ります（現在はサンプル用のイラストです）
-owlImg.src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=200'; 
+owlImg.src = 'char_fukuro.png'; // 同じフォルダ内のこのファイル名を自動で探します
 
-let lastResults = null;
-
-// 画面サイズに合わせてキャンバスの解像度を調整
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -104,7 +154,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// MediaPipe Face Mesh（顔認識AI）の設定
+// 顔認識AIの初期化
 const faceMesh = new FaceMesh({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
@@ -116,82 +166,70 @@ faceMesh.setOptions({
     minTrackingConfidence: 0.5
 });
 
-// 顔を検出したときのリアルタイム処理
+// 人物の顔を検出したときの追従処理
 faceMesh.onResults((results) => {
-    loading.style.display = 'none'; // 準備できたら案内を消す
-    lastResults = results;
-    
-    // キャンバスを一度きれいに消す
+    loading.style.display = 'none';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
         
-        // 顔の左上の特徴点（インデックス：21番、左眉の上あたり）を取得
-        const topLeftFace = landmarks[21];
+        // 人物の「右肩（画面向かって左側）」に配置するため、顔の左端（インデックス：21番）を基準点にする
+        const anchorPoint = landmarks[21];
         
-        // 画面上の実際のピクセル位置に変換
-        const x = (1 - topLeftFace.x) * canvas.width; // 反転考慮
-        const y = topLeftFace.y * canvas.height;
+        const x = (1 - anchorPoint.x) * canvas.width; 
+        const y = anchorPoint.y * canvas.height;
         
-        // 顔のサイズを計算して、フクロウの大きさを自動調整
+        // 顔の大きさに合わせて、フクロウのサイズをリアルタイムに自動拡縮
         const chin = landmarks[152];
         const forehead = landmarks[10];
         const faceSize = Math.abs(chin.y - forehead.y) * canvas.height;
         
-        const owlWidth = faceSize * 1.2;  // フクロウの横幅
-        const owlHeight = faceSize * 1.2; // フクロウの縦幅
+        const owlWidth = faceSize * 1.3;  
+        const owlHeight = faceSize * 1.3; 
         
-        // フクロウを人物の左肩（画面向かって右側、反転しているので左側へずらす）に配置
-        // ここの数字を調整してベストな肩の位置へ移動させます
-        const owlX = x - owlWidth * 1.3; 
-        const owlY = y + owlHeight * 0.3;
+        // 【絶妙なポジション設定】顔の基準点から、左肩の位置へ自動回り込み
+        const owlX = x - owlWidth * 1.2; 
+        const owlY = y + owlHeight * 0.4;
 
-        // フクロウを描画
-        if (owlImg.complete) {
+        if (owlImg.complete && owlImg.naturalWidth !== 0) {
             ctx.drawImage(owlImg, owlX, owlY, owlWidth, owlHeight);
         }
     }
 });
 
-// カメラの起動設定
 const camera = new Camera(video, {
-    onFrame: async () => {
-        await faceMesh.send({ image: video });
-    },
+    onFrame: async () => { await faceMesh.send({ image: video }); },
     width: 1280,
     height: 720
 });
 camera.start().catch(err => {
-    loading.innerText = "❌ カメラの起動に失敗しました。許可してください。";
+    loading.innerText = "❌ カメラの起動に失敗しました。";
 });
 
-// --- 📸 写真撮影＆スマホへの直接保存システム ---
+// --- 📸 写真撮影＆スマホ長押し保存システム ---
 shutterBtn.addEventListener('click', () => {
-    // 合体写真用の隠しキャンバスを作成
     const saveCanvas = document.createElement('canvas');
     saveCanvas.width = canvas.width;
     saveCanvas.height = canvas.height;
     const saveCtx = saveCanvas.getContext('2d');
 
-    // 1. カメラ映像を焼き付ける
+    // 1. カメラ背景を描画（鏡反転を直して自然な写真にする）
     saveCtx.translate(saveCanvas.width, 0);
-    saveCtx.scale(-1, 1); // 鏡像を直す
+    saveCtx.scale(-1, 1); 
     saveCtx.drawImage(video, 0, 0, saveCanvas.width, saveCanvas.height);
-    saveCtx.setTransform(1, 0, 0, 1, 0, 0); // 元に戻す
+    saveCtx.setTransform(1, 0, 0, 1, 0, 0); 
 
-    // 2. その上からフクロウを焼き付ける（現在のキャンバスをそのままコピー）
+    // 2. その上からフクロウを合成
     saveCtx.drawImage(canvas, 0, 0);
 
-    // 3. スマホの写真フォルダへダウンロードさせる魔法
-    const link = document.createElement('a');
-    link.download = `fukuro_photo_${Date.now()}.png`;
-    link.href = saveCanvas.toDataURL('image/png');
-    link.click();
-    
-    // 撮影時のフラッシュ演出
-    document.body.style.backgroundColor = '#fff';
-    setTimeout(() => { document.body.style.backgroundColor = '#000'; }, 100);
+    // 3. 長押し可能なポップアップとして表示
+    resultImage.src = saveCanvas.toDataURL('image/png');
+    resultContainer.style.display = 'flex';
+});
+
+closeBtn.addEventListener('click', () => {
+    resultContainer.style.display = 'none';
 });
 </script>
 </body>
