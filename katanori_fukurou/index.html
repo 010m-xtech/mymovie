@@ -239,8 +239,8 @@ faceMesh.onResults((results) => {
         const owlHeight = faceSize * 1.3; 
         
         // 内外カメラを問わず、画面向かって左側（人物の右肩の上）にフクロウを配置
-        const owlX = x - owlWidth * 2.0; 
-        const owlY = y + owlHeight * 1.0;
+        const owlX = x - owlWidth * 1.6; 
+        const owlY = y + owlHeight * 0.1;
 
         if (owlImg.complete && owlImg.naturalWidth !== 0) {
             ctx.drawImage(owlImg, owlX, owlY, owlWidth, owlHeight);
