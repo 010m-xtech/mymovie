@@ -19,7 +19,7 @@
             align-items: center;
         }
 
-        /* カメラ映像を全画面表示。JavaScript側で鏡反転(mirror)クラスを制御します */
+        /* スマホの縦向き・横向きを自動判別し、黒帯なしの100%全画面に引き伸ばす設定 */
         video {
             position: absolute;
             width: 100%;
@@ -57,7 +57,6 @@
             outline: none;
             -webkit-tap-highlight-color: transparent;
         }
-        /* ボタンの中の矢印アイコン（SVGで綺麗に描画） */
         #switch-btn svg {
             width: 26px;
             height: 26px;
@@ -126,11 +125,11 @@
 
         #result-msg {
             color: white;
-            font-size: 16px;
+            font-size: 15px;
             margin-top: 18px;
             text-align: center;
             font-weight: bold;
-            line-height: 1.5;
+            line-height: 1.6;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
@@ -167,7 +166,7 @@
 
 <div id="result-container">
     <img id="result-image" src="" alt="撮影された写真">
-    <div id="result-msg">📷 写真をながおしして<br>「ライブラリに保存」をえらんでね！</div>
+    <div id="result-msg">📷 写真をながおしして<br>「画像に保存」または「ダウンロード」をえらんでね！</div>
     <button id="close-btn">もう一度撮る</button>
 </div>
 
@@ -185,7 +184,7 @@ const closeBtn = document.getElementById('close-btn');
 const owlImg = new Image();
 owlImg.src = 'owl_overlay.png'; 
 
-let currentFacingMode = 'user'; // 'user' は内カメラ、'environment' は外カメラ
+let currentFacingMode = 'user'; 
 let activeCamera = null;
 
 function resizeCanvas() {
@@ -199,72 +198,66 @@ const faceMesh = new FaceMesh({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
 
+// 👥 複数人（最大4人グループまで）同時にフクロウが出るようにパワーアップ！
 faceMesh.setOptions({
-    maxNumFaces: 1,
+    maxNumFaces: 4, 
     refineLandmarks: true,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
 });
 
-// フクロウの配置計算処理
 faceMesh.onResults((results) => {
     loading.style.display = 'none';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // 画面に映っている人数分だけ処理を繰り返すループ（for文）
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        const landmarks = results.multiFaceLandmarks[0];
-        
-        // 内カメラと外カメラで左右の基準点を自動反転させる
-        let anchorPoint;
-        if (currentFacingMode === 'user') {
-            anchorPoint = landmarks[21]; // 内カメラ（鏡）のときは左端
-        } else {
-            anchorPoint = landmarks[251]; // 外カメラ（現実）のときは右端
-        }
-        
-        // カメラの向きに応じてX座標の計算を切り替え
-        let x;
-        if (currentFacingMode === 'user') {
-            x = (1 - anchorPoint.x) * canvas.width; 
-        } else {
-            x = anchorPoint.x * canvas.width;
-        }
-        const y = anchorPoint.y * canvas.height;
-        
-        const chin = landmarks[152];
-        const forehead = landmarks[10];
-        const faceSize = Math.abs(chin.y - forehead.y) * canvas.height;
-        
-        const owlWidth = faceSize * 1.3;  
-        const owlHeight = faceSize * 1.3; 
-        
-        // 内外カメラを問わず、画面向かって左側（人物の右肩の上）にフクロウを配置
-        const owlX = x - owlWidth * 1.6; 
-        const owlY = y + owlHeight * 0.1;
+        for (let i = 0; i < results.multiFaceLandmarks.length; i++) {
+            const landmarks = results.multiFaceLandmarks[i];
+            
+            let anchorPoint;
+            if (currentFacingMode === 'user') {
+                anchorPoint = landmarks[21]; 
+            } else {
+                anchorPoint = landmarks[251]; 
+            }
+            
+            let x;
+            if (currentFacingMode === 'user') {
+                x = (1 - anchorPoint.x) * canvas.width; 
+            } else {
+                x = anchorPoint.x * canvas.width;
+            }
+            const y = anchorPoint.y * canvas.height;
+            
+            const chin = landmarks[152];
+            const forehead = landmarks[10];
+            const faceSize = Math.abs(chin.y - forehead.y) * canvas.height;
+            
+            const owlWidth = faceSize * 1.3;  
+            const owlHeight = faceSize * 1.3; 
+            
+            // 【微調整可能エリア】1.2や0.4の数字を変えることでフクロウの位置をずらせます
+            const owlX = x - owlWidth * 1.2; 
+            const owlY = y + owlHeight * 0.4;
 
-        if (owlImg.complete && owlImg.naturalWidth !== 0) {
-            ctx.drawImage(owlImg, owlX, owlY, owlWidth, owlHeight);
+            if (owlImg.complete && owlImg.naturalWidth !== 0) {
+                ctx.drawImage(owlImg, owlX, owlY, owlWidth, owlHeight);
+            }
         }
     }
 });
 
-// 📹 カメラを起動・再起動する関数
 function startCamera(facingMode) {
     loading.style.display = 'block';
-    
-    // すでに動いているカメラがあれば一度完全に停止させる
-    if (activeCamera) {
-        activeCamera.stop();
-    }
+    if (activeCamera) { activeCamera.stop(); }
 
-    // ビデオ要素のミラー効果クラスを切り替え
     if (facingMode === 'user') {
         video.classList.add('mirror');
     } else {
         video.classList.remove('mirror');
     }
 
-    // 指定された向き（内か外か）で新しくカメラを設定
     activeCamera = new Camera(video, {
         onFrame: async () => { await faceMesh.send({ image: video }); },
         width: 1280,
@@ -277,38 +270,33 @@ function startCamera(facingMode) {
     });
 }
 
-// 最初の起動（まずは内カメラからスタート）
 startCamera(currentFacingMode);
 
-// 🔄 カメラ切り替えボタンが押されたときの処理
 switchBtn.addEventListener('click', () => {
-    // 'user'（内）なら 'environment'（外）に、その逆なら元に戻す
     currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
     startCamera(currentFacingMode);
 });
 
-// --- 📸 写真撮影＆スマホ長押し保存システム ---
+// --- 📸 写真撮影＆スマホ長押し保存システム（JPEG高画質軽量版） ---
 shutterBtn.addEventListener('click', () => {
     const saveCanvas = document.createElement('canvas');
     saveCanvas.width = canvas.width;
     saveCanvas.height = canvas.height;
     const saveCtx = saveCanvas.getContext('2d');
 
-    // 内カメラのときだけ写真の反転を直す
     if (currentFacingMode === 'user') {
         saveCtx.translate(saveCanvas.width, 0);
         saveCtx.scale(-1, 1); 
         saveCtx.drawImage(video, 0, 0, saveCanvas.width, saveCanvas.height);
         saveCtx.setTransform(1, 0, 0, 1, 0, 0); 
     } else {
-        // 外カメラのときはそのまま描画
         saveCtx.drawImage(video, 0, 0, saveCanvas.width, saveCanvas.height);
     }
 
-    // その上からフクロウを合成
     saveCtx.drawImage(canvas, 0, 0);
 
-    resultImage.src = saveCanvas.toDataURL('image/png');
+    // 📸 ここでPNGからJPEGに変換しています（画質85%で超軽量・高画質）
+    resultImage.src = saveCanvas.toDataURL('image/jpeg', 0.85);
     resultContainer.style.display = 'flex';
 });
 
